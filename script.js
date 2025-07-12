@@ -85,7 +85,7 @@ class PDFMerger {
 
   async processPDF(file) {
     const arrayBuffer = await file.arrayBuffer();
-    // 新しい方法でArrayBufferのディープコピーを作成
+    // ディープコピーを実行(非同期処理の不具合対策)
     const pdfData = arrayBuffer.slice(0);
 
     // PDF.js用にUint8Arrayを作成
@@ -218,12 +218,6 @@ class PDFMerger {
         throw new Error('PDF-libライブラリが読み込まれていません。');
       }
 
-      console.log('結合前のページデータ:', this.pages.map(p => ({
-        fileName: p.fileName,
-        hasPdfData: !!p.pdfData,
-        dataSize: p.pdfData?.byteLength || 0
-      })));
-
       const mergedPdf = await PDFLib.PDFDocument.create();
       const processedPDFs = new Map();
 
@@ -235,7 +229,7 @@ class PDFMerger {
             if (!page.pdfData || page.pdfData.byteLength === 0) {
               throw new Error(`${page.fileName}のデータが無効です。`);
             }
-            sourcePdf = await PDFLib.PDFDocument.load(page.pdfData);
+            sourcePdf = await PDFLib.PDFDocument.load(page.pdfData, { ignoreEncryption: true });
             processedPDFs.set(page.fileName, sourcePdf);
           }
 
@@ -254,13 +248,8 @@ class PDFMerger {
           throw new Error(`${page.fileName}のページ${page.pageNumber}の処理中にエラーが発生しました: ${pageError.message}`);
         }
       }
-
-      console.log('PDF結合開始...');
       const pdfBytes = await mergedPdf.save();
-      console.log('PDF結合完了、ダウンロード開始...');
-
       this.downloadPDF(pdfBytes);
-
     } catch (error) {
       console.error('PDF結合エラー:', error);
       alert(`PDF結合中にエラーが発生しました:\n${error.message}`);
