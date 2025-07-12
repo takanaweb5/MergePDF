@@ -86,7 +86,11 @@ class PDFMerger {
 
   async processPDF(file) {
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+    // 新しい方法でArrayBufferのディープコピーを作成
+    const pdfData = arrayBuffer.slice(0);
+
+    // PDF.js用にUint8Arrayを作成
+    const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
@@ -110,7 +114,7 @@ class PDFMerger {
         pageNumber: pageNum,
         totalPages: pdf.numPages,
         thumbnail: thumbnail,
-        pdfData: arrayBuffer,
+        pdfData: pdfData,  // スライスしたArrayBufferを使用
         pageIndex: pageNum - 1
       });
     }
@@ -215,6 +219,12 @@ class PDFMerger {
       if (typeof PDFLib === 'undefined') {
         throw new Error('PDF-libライブラリが読み込まれていません。');
       }
+
+      console.log('結合前のページデータ:', this.pages.map(p => ({
+        fileName: p.fileName,
+        hasPdfData: !!p.pdfData,
+        dataSize: p.pdfData?.byteLength || 0
+      })));
 
       const mergedPdf = await PDFLib.PDFDocument.create();
       const processedPDFs = new Map();
