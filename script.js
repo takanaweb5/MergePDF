@@ -125,17 +125,41 @@ class PDFMerger {
   renderPages() {
     this.pagesGrid.innerHTML = '';
 
-    this.pages.forEach((page, index) => {
+    this.pages.forEach((page) => {
       const pageElement = document.createElement('div');
       pageElement.className = 'page-item';
       pageElement.dataset.id = page.id;
 
-      pageElement.innerHTML = `
-                <button class="delete-btn" onclick="pdfMerger.deletePage('${page.id}')">×</button>
-                <img src="${page.thumbnail}" alt="Page ${page.pageNumber}" class="page-thumbnail">
-                <div class="page-info">${page.fileName}</div>
-                <div class="page-number">ページ ${page.pageNumber}/${page.totalPages}</div>
-            `;
+      // 削除ボタン
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.textContent = '×';
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.deletePage(page.id);
+      };
+
+      // サムネイル画像
+      const thumbnail = document.createElement('img');
+      thumbnail.src = page.thumbnail;
+      thumbnail.alt = `Page ${page.pageNumber}`;
+      thumbnail.className = 'page-thumbnail';
+
+      // ファイル情報
+      const pageInfo = document.createElement('div');
+      pageInfo.className = 'page-info';
+      pageInfo.textContent = page.fileName;
+
+      // ページ番号
+      const pageNumber = document.createElement('div');
+      pageNumber.className = 'page-number';
+      pageNumber.textContent = `ページ ${page.pageNumber}/${page.totalPages}`;
+
+      // 要素を追加
+      pageElement.appendChild(deleteBtn);
+      pageElement.appendChild(thumbnail);
+      pageElement.appendChild(pageInfo);
+      pageElement.appendChild(pageNumber);
 
       this.pagesGrid.appendChild(pageElement);
     });
