@@ -4,6 +4,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 class PDFMerger {
   constructor() {
     this.pages = [];
+    this.counter = 1;
     this.sortable = null;
     this.initializeElements();
     this.setupEventListeners();
@@ -71,9 +72,7 @@ class PDFMerger {
     this.showLoading();
 
     try {
-      for (const file of files) {
-        await this.processPDF(file);
-      }
+      await Promise.all(files.map(file => this.processPDF(file)));
       this.updateUI();
       this.setupSortable();
     } catch (error) {
@@ -109,13 +108,12 @@ class PDFMerger {
       const thumbnail = canvas.toDataURL();
 
       this.pages.push({
-        id: Date.now() + Math.random(),
-        fileName: file.name,
-        pageNumber: pageNum,
-        totalPages: pdf.numPages,
-        thumbnail: thumbnail,
-        pdfData: pdfData,  // スライスしたArrayBufferを使用
-        pageIndex: pageNum - 1
+        id: this.counter++,
+        fileName: file.name, // PDFファイル名
+        pageNumber: pageNum, // PDFファイル内のページ番号
+        totalPages: pdf.numPages, // PDFファイル内の総ページ数
+        thumbnail: thumbnail, // サムネイル画像(data:image/png)
+        pdfData: pdfData,  // PDFファイル全体のバイナリデータ(1ページ分ではない)
       });
     }
   }
@@ -139,7 +137,7 @@ class PDFMerger {
       deleteBtn.className = 'delete-btn';
       deleteBtn.textContent = '×';
       deleteBtn.onclick = (e) => {
-        e.stopPropagation();
+        e.stopPropagation(); // イベントの伝播を止める
         this.deletePage(page.id);
       };
 
@@ -231,27 +229,24 @@ class PDFMerger {
 
       for (const page of this.pages) {
         try {
-          let sourcePdf;
-
-          if (processedPDFs.has(page.fileName)) {
-            sourcePdf = processedPDFs.get(page.fileName);
-          } else {
+          let sourcePdf = processedPDFs.get(page.fileName);
+          if (!sourcePdf) {
             // ArrayBufferが有効かチェック
             if (!page.pdfData || page.pdfData.byteLength === 0) {
               throw new Error(`${page.fileName}のデータが無効です。`);
             }
-
             sourcePdf = await PDFLib.PDFDocument.load(page.pdfData);
             processedPDFs.set(page.fileName, sourcePdf);
           }
 
           // ページインデックスが有効かチェック
           const pageCount = sourcePdf.getPageCount();
-          if (page.pageIndex >= pageCount || page.pageIndex < 0) {
+          const pageIndex = page.pageNumber - 1;
+          if (pageIndex >= pageCount || pageIndex < 0) {
             throw new Error(`${page.fileName}のページ${page.pageNumber}が見つかりません。`);
           }
 
-          const [copiedPage] = await mergedPdf.copyPages(sourcePdf, [page.pageIndex]);
+          const [copiedPage] = await mergedPdf.copyPages(sourcePdf, [pageIndex]);
           mergedPdf.addPage(copiedPage);
 
         } catch (pageError) {
@@ -264,7 +259,7 @@ class PDFMerger {
       const pdfBytes = await mergedPdf.save();
       console.log('PDF結合完了、ダウンロード開始...');
 
-      this.downloadPDF(pdfBytes, 'merged.pdf');
+      this.downloadPDF(pdfBytes);
 
     } catch (error) {
       console.error('PDF結合エラー:', error);
@@ -274,12 +269,12 @@ class PDFMerger {
     }
   }
 
-  downloadPDF(pdfBytes, filename) {
+  downloadPDF(pdfBytes) {
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = 'merged.pdf';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
