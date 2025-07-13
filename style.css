@@ -176,6 +176,40 @@ header p {
   box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
 }
 
+.thumbnail-container {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.rotate-btn {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 2;
+}
+
+.page-item:hover .rotate-btn {
+  opacity: 1;
+}
+
+.rotate-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
 .page-thumbnail {
   width: 100%;
   max-width: 150px;
@@ -183,6 +217,8 @@ header p {
   border-radius: 5px;
   margin-bottom: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+  transform-origin: center center;
 }
 
 .page-info {

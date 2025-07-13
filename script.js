@@ -114,6 +114,7 @@ class PDFMerger {
         totalPages: pdf.numPages, // PDFファイル内の総ページ数
         thumbnail: thumbnail, // サムネイル画像(data:image/png)
         pdfData: pdfData,  // PDFファイル全体のバイナリデータ(1ページ分ではない)
+        rotation: 0 // 回転角度を0°で初期化
       });
     }
   }
@@ -141,11 +142,30 @@ class PDFMerger {
         this.deletePage(page.id);
       };
 
+      // サムネイルコンテナ
+      const thumbnailContainer = document.createElement('div');
+      thumbnailContainer.className = 'thumbnail-container';
+
       // サムネイル画像
       const thumbnail = document.createElement('img');
       thumbnail.src = page.thumbnail;
       thumbnail.alt = `Page ${page.pageNumber}`;
       thumbnail.className = 'page-thumbnail';
+      thumbnail.style.transform = `rotate(${page.rotation}deg)`;
+
+      // 回転ボタン
+      const rotateBtn = document.createElement('button');
+      rotateBtn.className = 'rotate-btn';
+      rotateBtn.title = '90°回転';
+      rotateBtn.innerHTML = '↻';
+      rotateBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.rotatePage(page.id, 90);
+      };
+
+      // コンテナに追加
+      thumbnailContainer.appendChild(thumbnail);
+      thumbnailContainer.appendChild(rotateBtn);
 
       // ファイル情報
       const pageInfo = document.createElement('div');
@@ -159,7 +179,7 @@ class PDFMerger {
 
       // 要素を追加
       pageElement.appendChild(deleteBtn);
-      pageElement.appendChild(thumbnail);
+      pageElement.appendChild(thumbnailContainer);
       pageElement.appendChild(pageInfo);
       pageElement.appendChild(pageNumber);
 
@@ -204,6 +224,14 @@ class PDFMerger {
     }
   }
 
+  rotatePage(pageId, degrees) {
+    const page = this.pages.find(p => p.id === pageId);
+    if (page) {
+      page.rotation = (page.rotation + degrees) % 360;
+      this.renderPages();
+    }
+  }
+
   async mergePDFs() {
     if (this.pages.length === 0) {
       alert('結合するページがありません。');
@@ -241,6 +269,12 @@ class PDFMerger {
           }
 
           const [copiedPage] = await mergedPdf.copyPages(sourcePdf, [pageIndex]);
+
+          // 回転を適用
+          if (page.rotation !== 0) {
+            copiedPage.setRotation(PDFLib.degrees(page.rotation));
+          }
+
           mergedPdf.addPage(copiedPage);
 
         } catch (pageError) {
