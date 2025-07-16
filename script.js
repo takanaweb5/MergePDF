@@ -109,6 +109,37 @@ class PDFMerger {
     }
   }
 
+  /**
+   * PDFページをキャンバスにレンダリングし、DataURLを返す
+   * @param {Object} page - PDFページオブジェクト
+   * @param {number} [scale] - 拡大率
+   * @param {number} [rotation] - 回転角度（度）
+   * @returns {Promise<string>} レンダリングされた画像のDataURL
+   */
+  async renderPdfPageToDataURL(page, scale, rotation = 0) {
+    // キャンバスの作成
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+
+    // ビューポートの取得と回転適用
+    const viewport = page.getViewport({ scale, rotation });
+
+    // キャンバスサイズの設定
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    // レンダリング
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+      intent: 'display',
+      enableWebGL: true,
+      renderInteractiveForms: false
+    }).promise;
+
+    return canvas.toDataURL();
+  }
+
   async processPDF(file) {
     const arrayBuffer = await file.arrayBuffer();
     // ディープコピーを実行(非同期処理の不具合対策)
@@ -119,22 +150,7 @@ class PDFMerger {
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-
-      const viewport = page.getViewport({ scale: 1.5 });
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      await page.render({
-        canvasContext: context,
-        viewport: viewport,
-        intent: 'display',
-        enableWebGL: true,
-        renderInteractiveForms: false
-      }).promise;
-
-      const thumbnail = canvas.toDataURL();
+      const thumbnail = await this.renderPdfPageToDataURL(page, 0.5);
       this.pages.push({
         id: this.counter++,
         fileName: file.name, // PDFファイル名
@@ -384,28 +400,7 @@ class PDFMerger {
       // PDFの読み込み
       const pdf = await pdfjsLib.getDocument(new Uint8Array(pdfData)).promise;
       const pdfPage = await pdf.getPage(pageData.pageNumber);
-
-      // キャンバスの作成
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-
-      // ビューポートの取得と回転適用
-      const viewport = pdfPage.getViewport({ scale: 1.5, rotation: pageData.rotation });
-      // キャンバスサイズの設定
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      // レンダリング
-      await pdfPage.render({
-        canvasContext: context,
-        viewport: viewport,
-        intent: 'display',
-        enableWebGL: true,
-        renderInteractiveForms: false
-      }).promise;
-
-      return canvas.toDataURL();
-
+      return await this.renderPdfPageToDataURL(pdfPage, 1.5, pageData.rotation);
     } catch (error) {
       console.error('PDFページ生成エラー:', {
         error: error.message,
