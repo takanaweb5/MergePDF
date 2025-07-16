@@ -7,6 +7,26 @@ class PDFMerger {
     this.counter = 1;
     this.sortable = null;
     this.currentPreviewIndex = -1; // 初期値を-1（未選択状態）に設定
+
+    function handlePreviewKeyDown(event) {
+      switch (event.key) {
+        case 'Escape':
+          this.closePreview();
+          break;
+        case 'ArrowLeft':
+          if (this.currentPreviewIndex > 0) {
+            this.drawImage(this.currentPreviewIndex - 1);
+          }
+          break;
+        case 'ArrowRight':
+          if (this.currentPreviewIndex < this.pages.length - 1) {
+            this.drawImage(this.currentPreviewIndex + 1);
+          }
+          break;
+      }
+    }
+    this.handlePreviewKeyDown = handlePreviewKeyDown.bind(this);
+
     this.initializeElements();
     this.setupEventListeners();
   }
@@ -28,44 +48,25 @@ class PDFMerger {
   }
 
   setupEventListeners() {
-    // ドラッグ&ドロップイベント
+    // 既存のイベントリスナー設定
     this.dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
     this.dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
     this.dropZone.addEventListener('drop', this.handleDrop.bind(this));
     this.dropZone.addEventListener('click', () => this.fileInput.click());
-
-    // ファイル選択イベント
     this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
-
-    // ボタンイベント
     this.clearBtn.addEventListener('click', this.clearPages.bind(this));
     this.mergeBtn.addEventListener('click', this.mergePDFs.bind(this));
-
-    // ファイル選択テキストのクリックイベント
-    document.querySelector('.file-select').addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.fileInput.click();
-    });
-
-    // モーダル関連のイベントリスナー
     this.closeModalBtn.addEventListener('click', this.closePreview.bind(this));
 
-    // 前のページボタンのクリックイベント
+    // 前のページへボタン
     document.getElementById('prevPageBtn').addEventListener('click', () => {
-      // 現在の表示中のインデックスを取得（仮に現在のインデックスを保持するプロパティが存在すると仮定）
-      const currentIndex = this.currentPreviewIndex || 0;
-      this.navigatePage(currentIndex - 1);
+      this.drawImage(this.currentPreviewIndex - 1);
     });
 
-    // 次のページボタンのクリックイベント
+    // 次のページへボタン
     document.getElementById('nextPageBtn').addEventListener('click', () => {
-      // 現在の表示中のインデックスを取得（仮に現在のインデックスを保持するプロパティが存在すると仮定）
-      const currentIndex = this.currentPreviewIndex || 0;
-      this.navigatePage(currentIndex + 1);
+      this.drawImage(this.currentPreviewIndex + 1);
     });
-
-    // キーボードイベントリスナーを追加
-    document.addEventListener('keydown', this.handleKeyDown.bind(this));
   }
 
   handleDragOver(e) {
@@ -365,20 +366,6 @@ class PDFMerger {
     this.loading.style.display = 'none';
   }
 
-  // ページナビゲーション用のメソッド
-  async navigatePage(index) {
-    // インデックスの範囲をチェック
-    if (0 <= index && index < this.pages.length) {
-      this.currentPreviewIndex = index;
-      const page = this.pages[index];
-      this.previewImage.src = await this.generatePDFPage(page);
-      // ナビゲーションボタンの状態を更新
-      this.updateNavigationButtons();
-      // ページカウンターを更新
-      this.updatePageCounter();
-    }
-  }
-
   // ページカウンターを更新するメソッドを追加
   updatePageCounter() {
     const pageCounter = document.getElementById('pageCounter');
@@ -411,15 +398,11 @@ class PDFMerger {
     }
   }
 
-  // モーダルを表示
-  async showPreview(index) {
+  async drawImage(index) {
     try {
-      // 現在のインデックスを更新
       this.currentPreviewIndex = index;
-      // モーダルに表示
       const page = this.pages[index];
       this.previewImage.src = await this.generatePDFPage(page);
-      this.previewModal.style.display = 'flex';
       // ナビゲーションボタンの状態を更新
       this.updateNavigationButtons();
       // ページカウンターを更新
@@ -430,11 +413,17 @@ class PDFMerger {
     }
   }
 
+  // モーダルを表示
+  async showPreview(index) {
+    await this.drawImage(index);
+    document.addEventListener('keydown', this.handlePreviewKeyDown);
+    this.previewModal.style.display = 'flex';
+  }
+
   // モーダルを閉じる
   closePreview() {
+    document.removeEventListener('keydown', this.handlePreviewKeyDown);
     this.previewModal.style.display = 'none';
-    // キーボードイベントリスナーを削除
-    document.removeEventListener('keydown', this.handleKeyDown.bind(this));
   }
 
   // ナビゲーションボタンの状態を更新
@@ -447,28 +436,6 @@ class PDFMerger {
 
     // 最後のページでは「次へ」ボタンを無効化
     nextBtn.disabled = (this.currentPreviewIndex === this.pages.length - 1);
-  }
-
-  // キーボードイベントハンドラ
-  handleKeyDown(event) {
-    // モーダルが表示されている場合のみ処理
-    if (this.previewModal.style.display !== 'flex') return;
-
-    switch (event.key) {
-      case 'Escape':
-        this.closePreview();
-        break;
-      case 'ArrowLeft':
-        if (this.currentPreviewIndex > 0) {
-          this.navigatePage(this.currentPreviewIndex - 1);
-        }
-        break;
-      case 'ArrowRight':
-        if (this.currentPreviewIndex < this.pages.length - 1) {
-          this.navigatePage(this.currentPreviewIndex + 1);
-        }
-        break;
-    }
   }
 }
 
