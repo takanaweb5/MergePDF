@@ -350,13 +350,12 @@ class PDFMerger {
   }
 
   // ページナビゲーション用のメソッド
-  navigatePage(index) {
+  async navigatePage(index) {
     // インデックスの範囲をチェック
     if (0 <= index && index < this.pages.length) {
       this.currentPreviewIndex = index;
       const page = this.pages[index];
-      this.previewImage.src = page.thumbnail;
-      this.previewImage.style.transform = `rotate(${page.rotation}deg)`;
+      this.previewImage.src = await this.generatePDFPage(page);
       // ナビゲーションボタンの状態を更新
       this.updateNavigationButtons();
       // ページカウンターを更新
@@ -372,6 +371,51 @@ class PDFMerger {
     }
   }
 
+  // PDFページの動的生成
+  async generatePDFPage(pageData) {
+    try {
+      // PDFデータのディープコピーを作成（非同期処理の安全対策）
+      const pdfData = pageData.pdfData.slice(0);
+      if (!pdfData) {
+        console.error('PDFデータが見つかりません:', pageData);
+        return null;
+      }
+
+      // PDFの読み込み
+      const pdf = await pdfjsLib.getDocument(new Uint8Array(pdfData)).promise;
+      const pdfPage = await pdf.getPage(pageData.pageNumber);
+
+      // キャンバスの作成
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+
+      // ビューポートの取得と回転適用
+      const viewport = pdfPage.getViewport({ scale: 1.5, rotation: pageData.rotation });
+      // キャンバスサイズの設定
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      // レンダリング
+      await pdfPage.render({
+        canvasContext: context,
+        viewport: viewport,
+        intent: 'display',
+        enableWebGL: true,
+        renderInteractiveForms: false
+      }).promise;
+
+      return canvas.toDataURL();
+
+    } catch (error) {
+      console.error('PDFページ生成エラー:', {
+        error: error.message,
+        pageNumber: pageData.pageNumber,
+        rotation: pageData.rotation
+      });
+      throw error;
+    }
+  }
+
   // モーダルを表示
   async showPreview(index) {
     try {
@@ -379,8 +423,7 @@ class PDFMerger {
       this.currentPreviewIndex = index;
       // モーダルに表示
       const page = this.pages[index];
-      this.previewImage.src = page.thumbnail;
-      this.previewImage.style.transform = `rotate(${page.rotation}deg)`;
+      this.previewImage.src = await this.generatePDFPage(page);
       this.previewModal.style.display = 'flex';
       // ナビゲーションボタンの状態を更新
       this.updateNavigationButtons();
