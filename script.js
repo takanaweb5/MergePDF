@@ -67,6 +67,11 @@ class PDFMerger {
     document.getElementById('nextPageBtn').addEventListener('click', () => {
       this.drawImage(this.currentPreviewIndex + 1);
     });
+
+    // 回転ボタン
+    document.getElementById('rotatePreviewBtn').addEventListener('click', () => {
+      this.rotatePreviewPage();
+    });
   }
 
   handleDragOver(e) {
@@ -424,6 +429,14 @@ class PDFMerger {
   closePreview() {
     document.removeEventListener('keydown', this.handlePreviewKeyDown);
     this.previewModal.style.display = 'none';
+  }
+
+  // プレビュー画面の回転処理
+  rotatePreviewPage() {
+    const page = this.pages[this.currentPreviewIndex];
+    if (!page) return;
+    this.rotatePage(page.id, 90);
+    this.drawImage(this.currentPreviewIndex);
   }
 
   // ナビゲーションボタンの状態を更新
