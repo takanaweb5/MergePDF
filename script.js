@@ -6,6 +6,7 @@ class PDFMerger {
     this.pages = [];
     this.counter = 1;
     this.sortable = null;
+    this.currentPreviewIndex = -1; // 初期値を-1（未選択状態）に設定
     this.initializeElements();
     this.setupEventListeners();
   }
@@ -48,6 +49,23 @@ class PDFMerger {
 
     // モーダル関連のイベントリスナー
     this.closeModalBtn.addEventListener('click', this.closePreview.bind(this));
+
+    // 前のページボタンのクリックイベント
+    document.getElementById('prevPageBtn').addEventListener('click', () => {
+      // 現在の表示中のインデックスを取得（仮に現在のインデックスを保持するプロパティが存在すると仮定）
+      const currentIndex = this.currentPreviewIndex || 0;
+      this.navigatePage(currentIndex - 1);
+    });
+
+    // 次のページボタンのクリックイベント
+    document.getElementById('nextPageBtn').addEventListener('click', () => {
+      // 現在の表示中のインデックスを取得（仮に現在のインデックスを保持するプロパティが存在すると仮定）
+      const currentIndex = this.currentPreviewIndex || 0;
+      this.navigatePage(currentIndex + 1);
+    });
+
+    // キーボードイベントリスナーを追加
+    document.addEventListener('keydown', this.handleKeyDown.bind(this));
   }
 
   handleDragOver(e) {
@@ -104,17 +122,19 @@ class PDFMerger {
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
 
-      const viewport = page.getViewport({ scale: 0.5 });
+      const viewport = page.getViewport({ scale: 1.5 });
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
       await page.render({
         canvasContext: context,
-        viewport: viewport
+        viewport: viewport,
+        intent: 'display',
+        enableWebGL: true,
+        renderInteractiveForms: false
       }).promise;
 
       const thumbnail = canvas.toDataURL();
-
       this.pages.push({
         id: this.counter++,
         fileName: file.name, // PDFファイル名
@@ -238,10 +258,13 @@ class PDFMerger {
     }
   }
 
-  rotatePage(pageId, degrees) {
+  async rotatePage(pageId, degrees) {
     const page = this.pages.find(p => p.id === pageId);
     if (page) {
+      // 回転角度を更新（0, 90, 180, 270度に制限）
       page.rotation = (page.rotation + degrees) % 360;
+
+      // サムネイル一覧を再描画
       this.renderPages();
     }
   }
@@ -326,54 +349,43 @@ class PDFMerger {
     this.loading.style.display = 'none';
   }
 
-  // PDFページの動的生成
-  async generatePDFPage(pageData, scale = 1.0) {
-    try {
-      // PDFデータのディープコピーを作成（非同期処理の安全対策）
-      const pdfData = pageData.pdfData.slice(0);
-      if (!pdfData) {
-        console.error('PDFデータが見つかりません:', pageData);
-        return null;
-      }
+  // ページナビゲーション用のメソッド
+  navigatePage(index) {
+    // インデックスの範囲をチェック
+    if (0 <= index && index < this.pages.length) {
+      this.currentPreviewIndex = index;
+      const page = this.pages[index];
+      this.previewImage.src = page.thumbnail;
+      this.previewImage.style.transform = `rotate(${page.rotation}deg)`;
+      // ナビゲーションボタンの状態を更新
+      this.updateNavigationButtons();
+      // ページカウンターを更新
+      this.updatePageCounter();
+    }
+  }
 
-      // PDFの読み込み
-      const pdf = await pdfjsLib.getDocument(new Uint8Array(pdfData)).promise;
-      const pdfPage = await pdf.getPage(pageData.pageNumber);
-
-      // キャンバスの作成
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-
-      // ビューポートの取得と回転適用
-      const viewport = pdfPage.getViewport({ scale: scale, rotation: pageData.rotation });
-      // キャンバスサイズの設定
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      // レンダリング
-      await pdfPage.render({
-        canvasContext: context,
-        viewport: viewport
-      }).promise;
-
-      return canvas.toDataURL();
-
-    } catch (error) {
-      console.error('PDFページ生成エラー:', {
-        error: error.message,
-        pageNumber: pageData.pageNumber,
-        rotation: pageData.rotation
-      });
-      throw error;
+  // ページカウンターを更新するメソッドを追加
+  updatePageCounter() {
+    const pageCounter = document.getElementById('pageCounter');
+    if (pageCounter) {
+      pageCounter.textContent = `${this.currentPreviewIndex + 1} / ${this.pages.length}`;
     }
   }
 
   // モーダルを表示
   async showPreview(index) {
     try {
+      // 現在のインデックスを更新
+      this.currentPreviewIndex = index;
       // モーダルに表示
-      this.previewImage.src = await this.generatePDFPage(this.pages[index], 1.2);
+      const page = this.pages[index];
+      this.previewImage.src = page.thumbnail;
+      this.previewImage.style.transform = `rotate(${page.rotation}deg)`;
       this.previewModal.style.display = 'flex';
+      // ナビゲーションボタンの状態を更新
+      this.updateNavigationButtons();
+      // ページカウンターを更新
+      this.updatePageCounter();
     } catch (error) {
       console.error('プレビュー表示エラー:', error);
       alert('プレビューの表示中にエラーが発生しました。');
@@ -383,6 +395,42 @@ class PDFMerger {
   // モーダルを閉じる
   closePreview() {
     this.previewModal.style.display = 'none';
+    // キーボードイベントリスナーを削除
+    document.removeEventListener('keydown', this.handleKeyDown.bind(this));
+  }
+
+  // ナビゲーションボタンの状態を更新
+  updateNavigationButtons() {
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+
+    // 最初のページでは「前へ」ボタンを無効化
+    prevBtn.disabled = (this.currentPreviewIndex === 0);
+
+    // 最後のページでは「次へ」ボタンを無効化
+    nextBtn.disabled = (this.currentPreviewIndex === this.pages.length - 1);
+  }
+
+  // キーボードイベントハンドラ
+  handleKeyDown(event) {
+    // モーダルが表示されている場合のみ処理
+    if (this.previewModal.style.display !== 'flex') return;
+
+    switch (event.key) {
+      case 'Escape':
+        this.closePreview();
+        break;
+      case 'ArrowLeft':
+        if (this.currentPreviewIndex > 0) {
+          this.navigatePage(this.currentPreviewIndex - 1);
+        }
+        break;
+      case 'ArrowRight':
+        if (this.currentPreviewIndex < this.pages.length - 1) {
+          this.navigatePage(this.currentPreviewIndex + 1);
+        }
+        break;
+    }
   }
 }
 
