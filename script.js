@@ -173,77 +173,76 @@ class PDFMerger {
   }
 
   updateUI() {
+    this.pagesGrid.innerHTML = '';
+    for (const page of this.pages) {
+      const pageElement = this.createPageElement(page);
+      this.pagesGrid.appendChild(pageElement);
+    }
     this.controls.style.display = this.pages.length > 0 ? 'flex' : 'none';
     this.pageCount.textContent = `${this.pages.length}ページ`;
-    this.renderPages();
+    this.setupSortable();
   }
 
-  renderPages() {
-    this.pagesGrid.innerHTML = '';
+  createPageElement(page) {
+    const pageElement = document.createElement('div');
+    pageElement.className = 'page-item';
+    pageElement.dataset.id = page.id;
 
-    this.pages.forEach((page) => {
-      const pageElement = document.createElement('div');
-      pageElement.className = 'page-item';
-      pageElement.dataset.id = page.id;
+    // 削除ボタン
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.textContent = '×';
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation(); // イベントの伝播を止める
+      this.deletePage(page.id);
+    };
 
-      // 削除ボタン
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'delete-btn';
-      deleteBtn.textContent = '×';
-      deleteBtn.onclick = (e) => {
-        e.stopPropagation(); // イベントの伝播を止める
-        this.deletePage(page.id);
-      };
+    // サムネイルコンテナ
+    const thumbnailContainer = document.createElement('div');
+    thumbnailContainer.className = 'thumbnail-container';
 
-      // サムネイルコンテナ
-      const thumbnailContainer = document.createElement('div');
-      thumbnailContainer.className = 'thumbnail-container';
+    // サムネイル
+    const thumbnail = document.createElement('img');
+    thumbnail.src = page.thumbnail;
+    thumbnail.alt = `Page ${page.pageNumber}`;
+    thumbnail.className = 'page-thumbnail';
+    page.image = thumbnail;
 
-      // サムネイル
-      const thumbnail = document.createElement('img');
-      thumbnail.src = page.thumbnail;
-      thumbnail.alt = `Page ${page.pageNumber}`;
-      thumbnail.className = 'page-thumbnail';
-      page.image = thumbnail;
-
-      // サムネイルクリック時のプレビュー表示
-      thumbnailContainer.addEventListener('click', () => {
-        this.showPreview(this.pages.indexOf(page));
-      });
-      thumbnailContainer.appendChild(thumbnail);
-
-      // 回転ボタン
-      const rotateBtn = document.createElement('button');
-      rotateBtn.className = 'rotate-btn';
-      rotateBtn.title = '90°回転';
-      rotateBtn.innerHTML = '↻';
-      rotateBtn.onclick = (e) => {
-        e.stopPropagation();
-        this.rotatePage(page.id, 90);
-      };
-      thumbnailContainer.appendChild(rotateBtn);
-
-      pageElement.appendChild(deleteBtn);
-      pageElement.appendChild(thumbnailContainer);
-
-      // ファイル情報
-      const pageInfo = document.createElement('div');
-      pageInfo.className = 'page-info';
-      pageInfo.textContent = page.fileName;
-
-      // ページ番号
-      const pageNumber = document.createElement('div');
-      pageNumber.className = 'page-number';
-      pageNumber.textContent = `ページ ${page.pageNumber}/${page.totalPages}`;
-
-      // 要素を追加
-      pageElement.appendChild(pageInfo);
-      pageElement.appendChild(pageNumber);
-
-      this.pagesGrid.appendChild(pageElement);
+    // サムネイルクリック時のプレビュー表示
+    thumbnailContainer.addEventListener('click', () => {
+      this.showPreview(this.pages.indexOf(page));
     });
+    thumbnailContainer.appendChild(thumbnail);
 
-    this.setupSortable();
+    // 回転ボタン
+    const rotateBtn = document.createElement('button');
+    rotateBtn.className = 'rotate-btn';
+    rotateBtn.title = '90°回転';
+    rotateBtn.innerHTML = '↻';
+    rotateBtn.onclick = (e) => {
+      e.stopPropagation();
+      this.rotatePage(page.id, 90);
+    };
+    thumbnailContainer.appendChild(rotateBtn);
+
+    pageElement.appendChild(deleteBtn);
+    pageElement.appendChild(thumbnailContainer);
+
+    // ファイル情報
+    const pageInfo = document.createElement('div');
+    pageInfo.className = 'page-info';
+    pageInfo.textContent = page.fileName;
+
+    // ページ番号
+    const pageNumber = document.createElement('div');
+    pageNumber.className = 'page-number';
+    pageNumber.textContent = `ページ ${page.pageNumber}/${page.totalPages}`;
+
+    // 要素を追加
+    pageElement.appendChild(pageInfo);
+    pageElement.appendChild(pageNumber);
+
+    return pageElement;
   }
 
   setupSortable() {
@@ -300,70 +299,75 @@ class PDFMerger {
       return;
     }
 
-    this.showLoading();
+    // 処理済みPDFを保持するMap
+    const processedPDFs = new Map();
+    const mergedPdf = await PDFLib.PDFDocument.create();
 
-    try {
-      // PDF-libが正しく読み込まれているかチェック
-      if (typeof PDFLib === 'undefined') {
-        throw new Error('PDF-libライブラリが読み込まれていません。');
+    function downloadPDF(pdfBytes) {
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'merged.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    /**
+     * ページをコピーして返す
+     * @param {Object} page - コピー元のページ情報
+     * @param {Object} mergedPdf - 結合先のPDFドキュメント
+     * @returns {Promise<Object>} コピーされたPDFページ
+     */
+    async function getCopiedPage(page, mergedPdf) {
+      let sourcePdf = processedPDFs.get(page.fileName);
+      if (!sourcePdf) {
+        // ArrayBufferが有効かチェック
+        if (!page.pdfData || page.pdfData.byteLength === 0) {
+          throw new Error(`${page.fileName}のデータが無効です。`);
+        }
+        sourcePdf = await PDFLib.PDFDocument.load(page.pdfData, { ignoreEncryption: true });
+        processedPDFs.set(page.fileName, sourcePdf);
       }
 
-      const mergedPdf = await PDFLib.PDFDocument.create();
-      const processedPDFs = new Map();
+      // ページインデックスが有効かチェック
+      const pageCount = sourcePdf.getPageCount();
+      const pageIndex = page.pageNumber - 1;
+      if (pageIndex >= pageCount || pageIndex < 0) {
+        throw new Error(`${page.fileName}のページ${page.pageNumber}が見つかりません。`);
+      }
 
+      const [copiedPage] = await mergedPdf.copyPages(sourcePdf, [pageIndex]);
+
+      // 回転を適用
+      if (page.rotation !== 0) {
+        copiedPage.setRotation(PDFLib.degrees(page.rotation));
+      }
+
+      return copiedPage;
+    }
+
+    this.showLoading();
+    try {
       for (const page of this.pages) {
         try {
-          let sourcePdf = processedPDFs.get(page.fileName);
-          if (!sourcePdf) {
-            // ArrayBufferが有効かチェック
-            if (!page.pdfData || page.pdfData.byteLength === 0) {
-              throw new Error(`${page.fileName}のデータが無効です。`);
-            }
-            sourcePdf = await PDFLib.PDFDocument.load(page.pdfData, { ignoreEncryption: true });
-            processedPDFs.set(page.fileName, sourcePdf);
-          }
-
-          // ページインデックスが有効かチェック
-          const pageCount = sourcePdf.getPageCount();
-          const pageIndex = page.pageNumber - 1;
-          if (pageIndex >= pageCount || pageIndex < 0) {
-            throw new Error(`${page.fileName}のページ${page.pageNumber}が見つかりません。`);
-          }
-
-          const [copiedPage] = await mergedPdf.copyPages(sourcePdf, [pageIndex]);
-
-          // 回転を適用
-          if (page.rotation !== 0) {
-            copiedPage.setRotation(PDFLib.degrees(page.rotation));
-          }
-
+          const copiedPage = await getCopiedPage(page, mergedPdf);
           mergedPdf.addPage(copiedPage);
-
         } catch (pageError) {
           console.error(`ページ処理エラー (${page.fileName}, ページ${page.pageNumber}):`, pageError);
           throw new Error(`${page.fileName}のページ${page.pageNumber}の処理中にエラーが発生しました: ${pageError.message}`);
         }
       }
       const pdfBytes = await mergedPdf.save();
-      this.downloadPDF(pdfBytes);
+      downloadPDF(pdfBytes);
     } catch (error) {
       console.error('PDF結合エラー:', error);
       alert(`PDF結合中にエラーが発生しました:\n${error.message}`);
     } finally {
       this.hideLoading();
     }
-  }
-
-  downloadPDF(pdfBytes) {
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'merged.pdf';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
 
   showLoading() {
@@ -374,13 +378,6 @@ class PDFMerger {
     this.loading.style.display = 'none';
   }
 
-  // ページカウンターを更新するメソッドを追加
-  updatePageCounter() {
-    const pageCounter = document.getElementById('pageCounter');
-    if (pageCounter) {
-      pageCounter.textContent = `${this.currentPreviewIndex + 1} / ${this.pages.length}`;
-    }
-  }
 
   // PDFページの動的生成
   async generatePDFPage(pageData) {
@@ -421,6 +418,19 @@ class PDFMerger {
     }
   }
 
+  updateNavigationButtons() {
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    prevBtn.disabled = (this.currentPreviewIndex === 0);
+    nextBtn.disabled = (this.currentPreviewIndex === this.pages.length - 1);
+  }
+  updatePageCounter() {
+    const pageCounter = document.getElementById('pageCounter');
+    if (pageCounter) {
+      pageCounter.textContent = `${this.currentPreviewIndex + 1} / ${this.pages.length}`;
+    }
+  }
+
   // モーダルを表示
   async showPreview(index) {
     await this.drawImage(index);
@@ -440,18 +450,6 @@ class PDFMerger {
     if (!page) return;
     await this.rotatePage(page.id, 90);
     await this.drawImage(this.currentPreviewIndex);
-  }
-
-  // プレビュー画面のナビゲーションボタンの状態を更新
-  updateNavigationButtons() {
-    const prevBtn = document.getElementById('prevPageBtn');
-    const nextBtn = document.getElementById('nextPageBtn');
-
-    // 最初のページでは「前へ」ボタンを無効化
-    prevBtn.disabled = (this.currentPreviewIndex === 0);
-
-    // 最後のページでは「次へ」ボタンを無効化
-    nextBtn.disabled = (this.currentPreviewIndex === this.pages.length - 1);
   }
 }
 
