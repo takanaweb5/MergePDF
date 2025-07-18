@@ -156,7 +156,7 @@ class PDFMerger {
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
-      const thumbnail = await this.renderPdfPageToDataURL(page, 0.5);
+      const thumbnail = await this.renderPdfPageToDataURL(page, 1.5);
       this.pages.push({
         id: this.counter++,
         fileName: file.name, // PDFファイル名
@@ -164,7 +164,8 @@ class PDFMerger {
         totalPages: pdf.numPages, // PDFファイル内の総ページ数
         thumbnail: thumbnail, // サムネイル画像(data:image/png)
         pdfData: pdfData,  // PDFファイル全体のバイナリデータ(1ページ分ではない)
-        rotation: 0 // 回転角度を0°で初期化
+        rotation: 0, // 回転角度を0°で初期化
+        image: null // サムネイルを表示するimgタグエレメント
       });
     }
   }
@@ -201,7 +202,7 @@ class PDFMerger {
       thumbnail.src = page.thumbnail;
       thumbnail.alt = `Page ${page.pageNumber}`;
       thumbnail.className = 'page-thumbnail';
-      thumbnail.style.transform = `rotate(${page.rotation}deg)`;
+      page.image = thumbnail;
 
       // サムネイルクリック時のプレビュー表示
       thumbnailContainer.addEventListener('click', () => {
@@ -285,9 +286,9 @@ class PDFMerger {
     if (page) {
       // 回転角度を更新（0, 90, 180, 270度に制限）
       page.rotation = (page.rotation + degrees) % 360;
-
-      // サムネイル一覧を再描画
-      this.renderPages();
+      page.thumbnail = await this.generatePDFPage(page);
+      // サムネイルを再描画
+      page.image.src = page.thumbnail;
     }
   }
 
@@ -407,7 +408,7 @@ class PDFMerger {
     try {
       this.currentPreviewIndex = index;
       const page = this.pages[index];
-      this.previewImage.src = await this.generatePDFPage(page);
+      this.previewImage.src = page.thumbnail;
       // ナビゲーションボタンの状態を更新
       this.updateNavigationButtons();
       // ページカウンターを更新
@@ -432,14 +433,14 @@ class PDFMerger {
   }
 
   // プレビュー画面の回転処理
-  rotatePreviewPage() {
+  async rotatePreviewPage() {
     const page = this.pages[this.currentPreviewIndex];
     if (!page) return;
-    this.rotatePage(page.id, 90);
-    this.drawImage(this.currentPreviewIndex);
+    await this.rotatePage(page.id, 90);
+    await this.drawImage(this.currentPreviewIndex);
   }
 
-  // ナビゲーションボタンの状態を更新
+  // プレビュー画面のナビゲーションボタンの状態を更新
   updateNavigationButtons() {
     const prevBtn = document.getElementById('prevPageBtn');
     const nextBtn = document.getElementById('nextPageBtn');
