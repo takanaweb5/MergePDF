@@ -37,7 +37,7 @@ class PDFMerger {
     this.controls = document.getElementById('controls');
     this.pagesGrid = document.getElementById('pagesGrid');
     this.clearBtn = document.getElementById('clearBtn');
-    this.mergeBtn = document.getElementById('mergeBtn');
+    this.saveBtn = document.getElementById('saveBtn');
     this.pageCount = document.getElementById('pageCount');
     this.loading = document.getElementById('loading');
 
@@ -55,7 +55,7 @@ class PDFMerger {
     this.dropZone.addEventListener('click', () => this.fileInput.click());
     this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
     this.clearBtn.addEventListener('click', this.clearPages.bind(this));
-    this.mergeBtn.addEventListener('click', this.mergePDFs.bind(this));
+    this.saveBtn.addEventListener('click', this.savePDF.bind(this));
     this.closeModalBtn.addEventListener('click', this.closePreview.bind(this));
 
     // 前のページへボタン
@@ -157,8 +157,9 @@ class PDFMerger {
     const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const thumbnail = await this.renderPdfPageToDataURL(page, 1.5);
+      const pdfPage = await pdf.getPage(pageNum);
+      const rotation = pdfPage._pageInfo.rotate;
+      const thumbnail = await this.renderPdfPageToDataURL(pdfPage, 1.5, rotation);
       this.pages.push({
         id: this.counter++,
         fileName: file.name, // PDFファイル名
@@ -166,7 +167,7 @@ class PDFMerger {
         totalPages: pdf.numPages, // PDFファイル内の総ページ数
         thumbnail: thumbnail, // サムネイル画像(data:image/png)
         pdfData: pdfData,  // PDFファイル全体のバイナリデータ(1ページ分ではない)
-        rotation: 0, // 回転角度を0°で初期化
+        rotation: rotation, // 回転角度
         image: null // サムネイルを表示するimgタグエレメント
       });
     }
@@ -293,7 +294,7 @@ class PDFMerger {
     }
   }
 
-  async mergePDFs() {
+  async savePDF() {
     if (this.pages.length === 0) {
       alert('結合するページがありません。');
       return;
