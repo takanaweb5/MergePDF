@@ -319,6 +319,15 @@ header p {
   padding: 20px;
 }
 
+.close-btn,
+.nav-btn,
+.rotate-preview-btn {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
 .close-btn {
   position: absolute;
   top: 20px;

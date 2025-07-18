@@ -104,7 +104,9 @@ class PDFMerger {
     this.showLoading();
 
     try {
-      await Promise.all(files.map(file => this.processPDF(file)));
+      for (const file of files) {
+        await this.processPDF(file);
+      }
       this.updateUI();
       this.setupSortable();
     } catch (error) {
